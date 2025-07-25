@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>外傷観察図（診断支援ツール）</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #container {
+      position: relative;
+      width: 400px;
+      margin-bottom: 20px;
+    }
+    img {
+      display: block;
+      width: 100%;
+    }
+    .region {
+      position: absolute;
+      border: 2px solid blue;
+      background-color: rgba(0, 0, 255, 0.1);
+      cursor: pointer;
+    }
+    .region.lg-affected {
+      border: 2px solid red;
+      background-color: rgba(255, 0, 0, 0.2);
+    }
+    .modal {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      display: none;
+      z-index: 1000;
+      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+    }
+    .result {
+      font-weight: bold;
+      font-size: 16px;
+      color: red;
+      margin-top: 10px;
+    }
+    .lg-flag {
+      color: white;
+      background-color: red;
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    .findings-list {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f9f9f9;
+      border: 1px solid #ccc;
+      max-width: 400px;
+    }
+    .findings-list h3 {
+      margin-top: 0;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    button {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>外傷観察図（診断支援ツール）</h2>
+
+  <div id="container">
+    <img src="img/20250725221032.jpg" alt="外傷観察図" />
+    <!-- ▼ 部位マーカー -->
+    <div class="region" id="head" style="top: 0px; left: 75px; width: 38px; height: 38px;"></div>
+    <div class="region" id="neck" style="top: 39px; left: 77px; width: 35px; height: 20px;"></div>
+    <div class="region" id="chest" style="top: 63px; left: 66px; width: 55px; height: 55px;"></div>
+    <div class="region" id="back" style="top: 0px; left: 275px; width: 55px; height: 215px;"></div>
+    <div class="region" id="abdomen" style="top: 120px; left: 66px; width: 55px; height: 55px;"></div>
+    <div class="region" id="waist" style="top: 180px; left: 66px; width: 55px; height: 30px;"></div>
+    <div class="region" id="right-thigh" style="top: 212px; left: 66px; width: 25px; height: 65px;"></div>
+    <div class="region" id="left-thigh" style="top: 212px; left: 96px; width: 25px; height: 65px;"></div>
+    <div class="region" id="right-lower-leg" style="top: 280px; left: 66px; width: 25px; height: 85px;"></div>
+    <div class="region" id="left-lower-leg" style="top: 280px; left: 96px; width: 25px; height: 85px;"></div>
+    <div class="region" id="right-arm" style="top: 65px; left: 40px; width: 20px; height: 120px;"></div>
+    <div class="region" id="left-arm" style="top: 65px; left: 127px; width: 20px; height: 120px;"></div>
+  </div>
+  <!-- ▼ 所見選択用モーダル -->
+  <div id="modal" class="modal">
+    <div id="modal-title"><strong>観察部位:</strong></div>
+    <form id="observation-form"></form>
+    <button onclick="closeModal()">閉じる</button>
+  </div>
+
+  <!-- ▼ 診断結果表示 -->
+  <div class="result" id="diagnosis-result">疑い傷病：</div>
+
+  <!-- ▼ 選択された所見リスト -->
+  <div class="findings-list" id="selected-findings-list">
+    <h3>選択された観察所見</h3>
+    <ul id="findings-display"></ul>
+  </div>
+
+<script>
+  const observationItems = {
+    head: ["顔面の高度な損傷", "気道熱傷"],
+    neck: ["頸静脈の怒張", "気管の偏位", "後頸部の圧痛", "皮下気腫"],
+    chest: ["打撲痕", "胸壁奇異運動", "吸い込み創", "呼吸音の左右差"],
+    back: ["後頭部の腫脹", "脊柱軸の偏位", "圧痛"],
+    abdomen: ["打撲痕", "皮下血腫または膨隆", "圧痛", "筋性防御", "反跳痛", "腸管脱出", "穿通性異物"],
+    waist: ["変形", "外表の損傷", "下肢長差", "恥骨結合の圧迫", "両側腸骨稜の内側への圧迫"],
+    "right-thigh": ["打撲痕", "挫創", "変形", "腫脹", "開放創", "圧痛"],
+    "left-thigh": ["打撲痕", "挫創", "変形", "腫脹", "開放創", "圧痛"],
+    "right-lower-leg": ["圧痛", "開放創", "轢断", "骨折", "神経学的異常"],
+    "left-lower-leg": ["圧痛", "開放創", "轢断", "骨折", "神経学的異常"],
+    "right-arm": ["圧痛", "開放創", "轢断", "骨折", "神経学的異常"],
+    "left-arm": ["圧痛", "開放創", "轢断", "骨折", "神経学的異常"]
+  };
+
+  const selectedFindings = new Set();
+  const modal = document.getElementById('modal');
+  const form = document.getElementById('observation-form');
+  const resultDiv = document.getElementById('diagnosis-result');
+  const findingsDisplay = document.getElementById('findings-display');
+  let currentRegion = '';
+  // ▼ 部位クリック → モーダル表示
+  document.querySelectorAll('.region').forEach(region => {
+    region.addEventListener('click', () => {
+      const regionId = region.id;
+      currentRegion = regionId;
+      const rect = region.getBoundingClientRect();
+      showModal(regionId, rect);
+    });
+  });
+
+  function showModal(regionId, rect) {
+    form.innerHTML = '';
+    document.getElementById('modal-title').textContent = `観察部位: ${regionId}`;
+    const items = observationItems[regionId] || [];
+
+    items.forEach(item => {
+      const label = document.createElement('label');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.value = `${regionId}:${item}`;
+      checkbox.checked = selectedFindings.has(checkbox.value);
+
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          selectedFindings.add(checkbox.value);
+        } else {
+          selectedFindings.delete(checkbox.value);
+        }
+        updateSelectedList();
+        checkDiagnosis();
+      });
+
+      label.appendChild(checkbox);
+      label.append(` ${item}`);
+      form.appendChild(label);
+    });
+
+    modal.style.left = `${rect.left}px`;
+    modal.style.top = `${rect.bottom + window.scrollY}px`;
+    modal.style.display = 'block';
+  }
+
+  function closeModal() {
+    modal.style.display = 'none';
+  }
+
+  function updateSelectedList() {
+    findingsDisplay.innerHTML = "";
+    const findingsByRegion = {};
+
+    selectedFindings.forEach(entry => {
+      const [region, item] = entry.split(":");
+      if (!findingsByRegion[region]) findingsByRegion[region] = [];
+      findingsByRegion[region].push(item);
+    });
+
+    for (const region in findingsByRegion) {
+      const li = document.createElement('li');
+      li.textContent = `${region}：${findingsByRegion[region].join(", ")}`;
+      findingsDisplay.appendChild(li);
+    }
+
+    if (selectedFindings.size === 0) {
+      const li = document.createElement('li');
+      li.textContent = "現在、選択されている観察所見はありません。";
+      findingsDisplay.appendChild(li);
+    }
+  }
+
+  const LG_keywords = [
+    "気道閉塞の疑い", "心タンポナーデの疑い", "緊張性気胸の疑い",
+    "開放性気胸の疑い", "フレイルチェストの疑い",
+    "腹腔内出血の疑い", "骨盤骨折の疑い", "両側の大腿骨の骨折疑い"
+  ];
+
+  function has(item) {
+    return selectedFindings.has(item);
+  }
+
+  function checkDiagnosis() {
+    let results = [];
+    let lgRegions = new Set();
+
+    const abdomenFindings = [
+      "abdomen:打撲痕", "abdomen:皮下血腫または膨隆",
+      "abdomen:圧痛", "abdomen:筋性防御",
+      "abdomen:反跳痛", "abdomen:腸管脱出"
+    ];
+    const abdomenCount = abdomenFindings.filter(has).length;
+
+    const rules = [
+      {
+        name: "気道閉塞の疑い",
+        cond: () => has("head:顔面の高度な損傷") || has("head:気道熱傷"),
+        lg: true,
+        regions: ["head"]
+      },
+      {
+        name: "開放性気胸の疑い",
+        cond: () => has("chest:吸い込み創"),
+        lg: true,
+        regions: ["chest"]
+      },
+      {
+        name: "緊張性気胸の疑い",
+        cond: () => has("chest:呼吸音の左右差"),
+        lg: true,
+        regions: ["chest", "neck"]
+      },
+      {
+        name: "心タンポナーデの疑い",
+        cond: () => has("chest:打撲痕") && has("neck:頸静脈の怒張"),
+        lg: true,
+        regions: ["chest", "neck"]
+      },
+      {
+        name: "フレイルチェストの疑い",
+        cond: () => has("chest:胸壁奇異運動"),
+        lg: true,
+        regions: ["chest"]
+      },
+      {
+        name: "腹腔内出血の疑い",
+        cond: () => has("abdomen:穿通性異物") || abdomenCount >= 2,
+        lg: true,
+        regions: ["abdomen"]
+      },
+      {
+        name: "骨盤骨折の疑い",
+        cond: () => [
+          "waist:変形", "waist:外表の損傷", "waist:下肢長差",
+          "waist:恥骨結合の圧迫", "waist:両側腸骨稜の内側への圧迫"
+        ].some(has),
+        lg: true,
+        regions: ["waist"]
+      },
+      {
+        name: "脊髄損傷の疑い",
+        cond: () => has("neck:後頸部の圧痛") && [
+          "left-arm:神経学的異常", "right-arm:神経学的異常",
+          "left-lower-leg:神経学的異常", "right-lower-leg:神経学的異常"
+        ].some(has),
+        lg: false,
+        regions: ["neck"]
+      },
+      {
+        name: "脊髄損傷の疑い",
+        cond: () => has("back:脊柱軸の偏位"),
+        lg: false,
+        regions: ["back"]
+      },
+      {
+        name: "大腿骨の骨折疑い（右）",
+        cond: () => ["right-thigh:変形", "right-thigh:腫脹", "right-thigh:開放創"].some(has),
+        lg: false,
+        regions: ["right-thigh"]
+      },
+      {
+        name: "大腿骨の骨折疑い（左）",
+        cond: () => ["left-thigh:変形", "left-thigh:腫脹", "left-thigh:開放創"].some(has),
+        lg: false,
+        regions: ["left-thigh"]
+      }
+    ];
+
+    for (const rule of rules) {
+      if (rule.cond()) {
+        results.push(rule.name);
+        if (rule.lg) rule.regions.forEach(r => lgRegions.add(r));
+      }
+    }
+
+    if (
+      ["right-thigh:変形", "right-thigh:腫脹", "right-thigh:開放創"].some(has) &&
+      ["left-thigh:変形", "left-thigh:腫脹", "left-thigh:開放創"].some(has)
+    ) {
+      results.push("両側の大腿骨の骨折疑い");
+      lgRegions.add("right-thigh");
+      lgRegions.add("left-thigh");
+    }
+
+    // 色分け
+    document.querySelectorAll('.region').forEach(el => {
+      el.classList.remove("lg-affected");
+      if (lgRegions.has(el.id)) el.classList.add("lg-affected");
+    });
+
+    const lgMark = lgRegions.size > 0 ? `<span class="lg-flag">⚠️ L&G</span>` : "";
+    resultDiv.innerHTML = `疑い傷病：${results.join(" / ") || "なし"} ${lgMark}`;
+  }
+</script>
+</body>
+</html>
